@@ -1,0 +1,150 @@
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+
+class Neuron:
+    def __init__(self, n_inputs, bias=0., weights=None):
+        self.b = bias
+        if weights:
+            self.ws = np.array(weights)
+        else:
+            self.ws = np.random.rand(n_inputs)
+
+    def _f(self, x):
+        return max(x * 0.1, x)
+
+    def __call__(self, xs):
+        return self._f(xs @ self.ws + self.b)
+
+
+class NeuralNetwork:
+    def __init__(self):
+        self.input_layer_size = 3
+        self.hidden_layer1_size = 4
+        self.hidden_layer2_size = 4
+        self.output_layer_size = 1
+
+        self.hidden_layer1 = [Neuron(self.input_layer_size) for _ in range(self.hidden_layer1_size)]
+        self.hidden_layer2 = [Neuron(self.hidden_layer1_size) for _ in range(self.hidden_layer2_size)]
+        self.output_layer = Neuron(self.hidden_layer2_size)
+
+    def visualize_network(self):
+        
+        print("Network Structure:")
+        print("Input Layer: 3 neurons")
+        print("Hidden Layer 1: 4 neurons")
+        print("Hidden Layer 2: 4 neurons")
+        print("Output Layer: 1 neuron")
+        
+        input_size = 3 
+        hidden_size_1 = 4 
+        hidden_size_2 = 4 
+        output_size = 1 
+        node_size = 1000 
+        node_color = 'skyblue' 
+        edge_color = 'grey' 
+
+
+        G = nx.DiGraph()
+
+
+        for i in range(input_size):
+            G.add_node(f'x{i}', label=f'x{i}', pos=(0, -0.5-i+input_size/2))
+
+        for i in range(hidden_size_1):
+            G.add_node(f'h1_{i}', label=f'h1_{i}', pos=(1, -0.5-i+hidden_size_1/2))
+
+        for i in range(hidden_size_2):
+            G.add_node(f'h2_{i}', label=f'h2_{i}', pos=(2, -0.5-i+hidden_size_2/2))
+
+        for i in range(output_size):
+            G.add_node(f'y{i}', label=f'y{i}', pos=(3, -0.5-i+output_size/2))
+
+
+        for i in range(input_size):
+            for j in range(hidden_size_1):
+                G.add_edge(f'x{i}', f'h1_{j}')
+
+        for i in range(hidden_size_1):
+            for j in range(hidden_size_2):
+                G.add_edge(f'h1_{i}', f'h2_{j}')
+
+        for i in range(hidden_size_2):
+            for j in range(output_size):
+                G.add_edge(f'h2_{i}', f'y{j}')
+
+
+        pos = nx.get_node_attributes(G, 'pos') 
+        labels = nx.get_node_attributes(G, 'label')
+        weights = nx.get_edge_attributes(G, 'weight') 
+
+        nx.draw(G, pos, node_size=node_size, node_color=node_color, edge_color=edge_color, with_labels=True, labels=labels)
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=weights)
+
+        plt.axis('off')
+        plt.show()
+
+network = NeuralNetwork()
+
+network.visualize_network()
+
+def sigmoid(x, derivative=False):
+    if derivative:
+        return sigmoid(x, derivative=False) * (1 - sigmoid(x, derivative=False))
+    else:
+        return 1 / (1 + np.exp(-x))
+
+np.random.seed(1)
+
+alpha = 0.1
+
+X = np.array([
+    [0, 0, 1],
+    [0, 1, 1],
+    [1, 0, 0],
+    [1, 1, 0],
+    [1, 0, 1],
+    [1, 1, 1],
+])
+
+y = np.array([[0, 1, 0, 1, 1, 0]]).T
+
+hidden1_weights = 2 * np.random.random((network.input_layer_size + 1, network.hidden_layer1_size)) - 1
+hidden2_weights = 2 * np.random.random((network.hidden_layer1_size + 1, network.hidden_layer2_size)) - 1
+output_weights = 2 * np.random.random((network.hidden_layer2_size + 1, network.output_layer_size)) - 1
+
+
+num_iterations = 10000
+
+
+for i in range(num_iterations):
+    input_layer_outputs = np.hstack((np.ones((X.shape[0], 1)), X))
+    hidden1_outputs = np.hstack((np.ones((X.shape[0], 1)), sigmoid(np.dot(input_layer_outputs, hidden1_weights))))
+    hidden2_outputs = np.hstack((np.ones((X.shape[0], 1)), sigmoid(np.dot(hidden1_outputs, hidden2_weights))))
+    output_layer_outputs = sigmoid(np.dot(hidden2_outputs, output_weights))
+
+    output_error = output_layer_outputs - y
+    output_delta = output_error * sigmoid(output_layer_outputs, derivative=True)
+
+    
+    hidden2_error = np.dot(output_delta, output_weights[1:, :].T)
+    hidden2_delta = hidden2_error * sigmoid(hidden2_outputs[:, 1:], derivative=True)
+
+    hidden1_error = np.dot(hidden2_delta, hidden2_weights[1:, :].T)
+    hidden1_delta = hidden1_error * sigmoid(hidden1_outputs[:, 1:], derivative=True)
+   
+    hidden1_pd = input_layer_outputs[:, :, np.newaxis] * hidden1_delta[:, np.newaxis, :]
+    hidden2_pd = hidden1_outputs[:, :, np.newaxis] * hidden2_delta[:, np.newaxis, :]
+    output_pd = hidden2_outputs[:, :, np.newaxis] * output_delta[:, np.newaxis, :]
+
+    total_hidden1_gradient = np.average(hidden1_pd, axis=0)
+    total_hidden2_gradient = np.average(hidden2_pd, axis=0)
+    total_output_gradient = np.average(output_pd, axis=0)
+
+    hidden1_weights -= alpha * total_hidden1_gradient
+    hidden2_weights -= alpha * total_hidden2_gradient
+    output_weights -= alpha * total_output_gradient
+
+
+print("Output After Training:\n{}".format(output_layer_outputs))
+
